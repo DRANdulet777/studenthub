@@ -29,14 +29,16 @@ class FirebaseAuthRepository implements AuthRepository {
           .get();
 
       if (!userDoc.exists) {
-        throw Exception('User profile not found');
+        await _firebaseAuth.signOut();
+        throw Exception('Неверный email или пароль');
       }
 
       return User.fromJson(userDoc.data()!);
-    } on firebase_auth.FirebaseAuthException catch (e) {
-      throw Exception(e.message);
+    } on firebase_auth.FirebaseAuthException {
+      throw Exception('Неверный email или пароль');
     } catch (e) {
-      throw Exception('Login failed: $e');
+      await _firebaseAuth.signOut();
+      throw Exception('Неверный email или пароль');
     }
   }
 

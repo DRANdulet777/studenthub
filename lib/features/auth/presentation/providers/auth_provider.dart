@@ -19,16 +19,18 @@ class AuthState {
 
   AuthState copyWith({
     User? user,
+    bool clearUser = false,
     bool? isLoading,
     bool? hasCompletedOnboarding,
     String? error,
+    bool clearError = false,
   }) {
     return AuthState(
-      user: user ?? this.user,
+      user: clearUser ? null : user ?? this.user,
       isLoading: isLoading ?? this.isLoading,
       hasCompletedOnboarding:
           hasCompletedOnboarding ?? this.hasCompletedOnboarding,
-      error: error ?? this.error,
+      error: clearError ? null : error ?? this.error,
     );
   }
 }
@@ -54,12 +56,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearUser: true, clearError: true);
     try {
       final user = await _repository.login(email, password);
-      state = state.copyWith(user: user, error: null);
+      state = state.copyWith(user: user, clearError: true);
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(clearUser: true, error: 'Неверный email или пароль');
     } finally {
       state = state.copyWith(isLoading: false);
     }
@@ -96,7 +98,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     state = state.copyWith(isLoading: true);
     await _repository.logout();
-    state = state.copyWith(user: null, isLoading: false);
+    state = state.copyWith(clearUser: true, isLoading: false, clearError: true);
   }
 
   Future<void> refreshCurrentUser() async {

@@ -1,4 +1,5 @@
 import 'package:go_router/go_router.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:student_hub/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:student_hub/features/auth/presentation/screens/login_screen.dart';
 import 'package:student_hub/features/auth/presentation/screens/onboarding_screen.dart';
@@ -19,6 +20,13 @@ class AppRouter {
   static GoRouter get router {
     return GoRouter(
       initialLocation: '/splash',
+      redirect: (context, state) {
+        final isAppRoute = state.matchedLocation.startsWith('/app/');
+        if (isAppRoute && FirebaseAuth.instance.currentUser == null) {
+          return '/login';
+        }
+        return null;
+      },
       routes: [
         GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
         GoRoute(path: '/onboarding', builder: (context, state) => const OnboardingScreen()),

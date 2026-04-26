@@ -68,6 +68,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       : const Text('Войти'),
                 ),
               ),
+              if (authState.error != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  authState.error!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ],
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
