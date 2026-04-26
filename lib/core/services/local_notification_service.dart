@@ -177,6 +177,19 @@ class LocalNotificationService {
   }
 
   // Вспомогательные методы для создания уведомлений разных типов
+  Future<void> showNewTaskNotification({
+    required String taskTitle,
+    required String taskId,
+  }) async {
+    await showNotification(
+      id: taskId.hashCode,
+      title: 'Новый дедлайн',
+      body: 'Добавлена задача: $taskTitle',
+      payload: '/app/tasks',
+      priority: NotificationPriority.normal,
+    );
+  }
+
   Future<void> showTaskDeadlineNotification({
     required String taskTitle,
     required Duration timeLeft,
@@ -221,7 +234,7 @@ class LocalNotificationService {
     await showNotification(
       id: subjectId.hashCode,
       title: 'Новая оценка',
-      body: 'Появилась новая оценка ($grade) по предмету "$subject"',
+      body: '$subject: $grade',
       payload: '/app/grades',
       priority: NotificationPriority.normal,
     );
@@ -235,7 +248,7 @@ class LocalNotificationService {
       id: materialId.hashCode,
       title: 'Обновление материалов',
       body: 'Добавлены новые материалы по курсу "$courseName"',
-      payload: '/app/materials',
+      payload: '/app/home',
       priority: NotificationPriority.low,
     );
   }

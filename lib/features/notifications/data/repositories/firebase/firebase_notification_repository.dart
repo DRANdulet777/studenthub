@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:student_hub/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:student_hub/features/notifications/domain/entities/notification_item.dart';
 
@@ -23,12 +24,30 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .get();
 
       return snapshot.docs
-          .map((doc) => NotificationItem.fromJson(doc.data()))
+          .map((doc) => NotificationItem.fromJson(_withDocumentId(doc)))
           .toList();
     } catch (e) {
-      print('FirebaseNotificationRepository getNotifications error: $e');
+      debugPrint('FirebaseNotificationRepository getNotifications error: $e');
       return [];
     }
+  }
+
+  @override
+  Stream<List<NotificationItem>> watchNotifications() {
+    final userId = _getCurrentUserId();
+    if (userId == null) return Stream.value(const []);
+
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('notifications')
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => NotificationItem.fromJson(_withDocumentId(doc)))
+              .toList(),
+        );
   }
 
   @override
@@ -46,10 +65,10 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .get();
 
       return snapshot.docs
-          .map((doc) => NotificationItem.fromJson(doc.data()))
+          .map((doc) => NotificationItem.fromJson(_withDocumentId(doc)))
           .toList();
     } catch (e) {
-      print('FirebaseNotificationRepository getUnreadNotifications error: $e');
+      debugPrint('FirebaseNotificationRepository getUnreadNotifications error: $e');
       return [];
     }
   }
@@ -67,9 +86,9 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc(id)
           .get();
 
-      return doc.exists ? NotificationItem.fromJson(doc.data()!) : null;
+      return doc.exists ? NotificationItem.fromJson(_withDocumentId(doc)) : null;
     } catch (e) {
-      print('FirebaseNotificationRepository getNotificationById error: $e');
+      debugPrint('FirebaseNotificationRepository getNotificationById error: $e');
       return null;
     }
   }
@@ -87,7 +106,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc(id)
           .update({'isRead': true});
     } catch (e) {
-      print('FirebaseNotificationRepository markAsRead error: $e');
+      debugPrint('FirebaseNotificationRepository markAsRead error: $e');
     }
   }
 
@@ -108,7 +127,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
         await doc.reference.update({'isRead': true});
       }
     } catch (e) {
-      print('FirebaseNotificationRepository markAllAsRead error: $e');
+      debugPrint('FirebaseNotificationRepository markAllAsRead error: $e');
     }
   }
 
@@ -117,16 +136,41 @@ class FirebaseNotificationRepository implements NotificationRepository {
     try {
       final userId = _getCurrentUserId();
       if (userId == null) throw Exception('Not authenticated');
+      if (notification.sourceId != null &&
+          await hasNotificationForSource(notification.sourceId!)) {
+        return;
+      }
 
       await _firestore
           .collection('users')
           .doc(userId)
           .collection('notifications')
           .doc(notification.id)
-          .set(notification.toJson());
+          .set(_toFirestore(notification));
     } catch (e) {
-      print('FirebaseNotificationRepository createNotification error: $e');
+      debugPrint('FirebaseNotificationRepository createNotification error: $e');
       throw Exception('Failed to create notification: $e');
+    }
+  }
+
+  @override
+  Future<bool> hasNotificationForSource(String sourceId) async {
+    try {
+      final userId = _getCurrentUserId();
+      if (userId == null) return false;
+
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('notifications')
+          .where('sourceId', isEqualTo: sourceId)
+          .limit(1)
+          .get();
+
+      return snapshot.docs.isNotEmpty;
+    } catch (e) {
+      debugPrint('FirebaseNotificationRepository hasNotificationForSource error: $e');
+      return false;
     }
   }
 
@@ -143,7 +187,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc(id)
           .delete();
     } catch (e) {
-      print('FirebaseNotificationRepository deleteNotification error: $e');
+      debugPrint('FirebaseNotificationRepository deleteNotification error: $e');
     }
   }
 
@@ -163,7 +207,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
         await doc.reference.delete();
       }
     } catch (e) {
-      print('FirebaseNotificationRepository clearAllNotifications error: $e');
+      debugPrint('FirebaseNotificationRepository clearAllNotifications error: $e');
     }
   }
 
@@ -186,7 +230,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
           ? NotificationSettings.fromJson(doc.data()!)
           : NotificationSettings.defaultSettings();
     } catch (e) {
-      print('FirebaseNotificationRepository getNotificationSettings error: $e');
+      debugPrint('FirebaseNotificationRepository getNotificationSettings error: $e');
       return NotificationSettings.defaultSettings();
     }
   }
@@ -204,7 +248,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc('notifications')
           .set(settings.toJson());
     } catch (e) {
-      print(
+      debugPrint(
         'FirebaseNotificationRepository saveNotificationSettings error: $e',
       );
       throw Exception('Failed to save notification settings: $e');
@@ -222,9 +266,9 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc(userId)
           .collection('scheduledNotifications')
           .doc(notification.id)
-          .set(notification.toJson());
+          .set(_toFirestore(notification));
     } catch (e) {
-      print('FirebaseNotificationRepository scheduleNotification error: $e');
+      debugPrint('FirebaseNotificationRepository scheduleNotification error: $e');
       throw Exception('Failed to schedule notification: $e');
     }
   }
@@ -242,7 +286,7 @@ class FirebaseNotificationRepository implements NotificationRepository {
           .doc(id)
           .delete();
     } catch (e) {
-      print(
+      debugPrint(
         'FirebaseNotificationRepository cancelScheduledNotification error: $e',
       );
     }
@@ -271,5 +315,22 @@ class FirebaseNotificationRepository implements NotificationRepository {
 
   String? _getCurrentUserId() {
     return FirebaseAuth.instance.currentUser?.uid;
+  }
+
+  Map<String, dynamic> _toFirestore(NotificationItem notification) {
+    final data = notification.toJson();
+    data['createdAt'] = Timestamp.fromDate(notification.createdAt);
+    if (notification.scheduledAt != null) {
+      data['scheduledAt'] = Timestamp.fromDate(notification.scheduledAt!);
+    }
+    return data;
+  }
+
+  Map<String, dynamic> _withDocumentId(
+    DocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = Map<String, dynamic>.from(doc.data() ?? {});
+    data['id'] ??= doc.id;
+    return data;
   }
 }

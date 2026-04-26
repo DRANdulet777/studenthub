@@ -1,7 +1,12 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:student_hub/core/services/local_notification_service.dart';
+import 'package:student_hub/features/notifications/data/repositories/firebase/firebase_notification_repository.dart';
+import 'package:student_hub/features/notifications/domain/entities/notification_item.dart';
+import 'package:student_hub/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:student_hub/features/grades/domain/repositories/grade_repository.dart';
 import 'package:student_hub/features/grades/data/repositories/firebase/firebase_grade_repository.dart';
 import 'package:student_hub/features/grades/domain/entities/grade_item.dart';
@@ -40,9 +45,20 @@ class GradeState {
 
 class GradeNotifier extends StateNotifier<GradeState> {
   final GradeRepository _repository;
+  final LocalNotificationService _localNotifications;
+  final NotificationRepository _notificationRepository;
   StreamSubscription<List<GradeItem>>? _gradesSubscription;
+  final Set<String> _knownGradeIds = {};
+  bool _hasReceivedInitialSnapshot = false;
 
-  GradeNotifier(this._repository) : super(GradeState()) {
+  GradeNotifier(
+    this._repository, {
+    LocalNotificationService? localNotifications,
+    NotificationRepository? notificationRepository,
+  }) : _localNotifications = localNotifications ?? LocalNotificationService(),
+       _notificationRepository =
+           notificationRepository ?? FirebaseNotificationRepository(),
+       super(GradeState()) {
     _watchGrades();
   }
 
@@ -73,6 +89,7 @@ class GradeNotifier extends StateNotifier<GradeState> {
   }
 
   void _setGrades(List<GradeItem> grades) {
+    unawaited(_notifyAboutNewGrades(grades));
     state = state.copyWith(
       grades: grades,
       subjectGrades: _buildSubjectGrades(grades),
@@ -80,6 +97,55 @@ class GradeNotifier extends StateNotifier<GradeState> {
       isLoading: false,
       error: null,
     );
+  }
+
+  Future<void> _notifyAboutNewGrades(List<GradeItem> grades) async {
+    final currentIds = grades
+        .map((grade) => grade.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    if (!_hasReceivedInitialSnapshot) {
+      _knownGradeIds
+        ..clear()
+        ..addAll(currentIds);
+      _hasReceivedInitialSnapshot = true;
+      return;
+    }
+
+    if (FirebaseAuth.instance.currentUser == null) return;
+
+    for (final grade in grades) {
+      if (grade.id.isEmpty || _knownGradeIds.contains(grade.id)) continue;
+      if (await _notificationRepository.hasNotificationForSource(grade.id)) {
+        continue;
+      }
+
+      final subject = grade.subject.trim().isNotEmpty
+          ? grade.subject.trim()
+          : grade.subjectName.trim().isNotEmpty
+              ? grade.subjectName.trim()
+              : 'Без предмета';
+      await _localNotifications.showGradeNotification(
+        subject: subject,
+        grade: grade.grade,
+        subjectId: grade.id,
+      );
+      await _notificationRepository.createNotification(
+        NotificationItem(
+          id: grade.id,
+          title: 'Новая оценка',
+          message: '$subject: ${grade.grade}',
+          type: NotificationType.gradePosted,
+          createdAt: DateTime.now(),
+          actionUrl: '/app/grades',
+          sourceId: grade.id,
+        ),
+      );
+    }
+
+    _knownGradeIds
+      ..clear()
+      ..addAll(currentIds);
   }
 
   List<GradeItem> getGradesBySubject(String subjectId) {

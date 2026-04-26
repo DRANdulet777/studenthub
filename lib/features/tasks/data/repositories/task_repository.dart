@@ -2,6 +2,7 @@ import 'package:student_hub/features/tasks/domain/entities/task_item.dart';
 
 abstract class TaskRepository {
   Future<List<TaskItem>> getTasks();
+  Stream<List<TaskItem>> watchTasks();
   Future<TaskItem> addTask(TaskItem task);
   Future<TaskItem> createTask(TaskItem task);
   Future<TaskItem> updateTask(String id, TaskItem task);

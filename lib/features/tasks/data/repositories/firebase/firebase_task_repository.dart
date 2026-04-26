@@ -35,6 +35,21 @@ class FirebaseTaskRepository implements TaskRepository {
   }
 
   @override
+  Stream<List<TaskItem>> watchTasks() {
+    final userId = _getCurrentUserId();
+    if (userId == null) return Stream.value(const []);
+
+    return _tasksCollection(userId)
+        .orderBy('dueDate')
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => TaskItem.fromJson(_withDocumentId(doc)))
+              .toList(),
+        );
+  }
+
+  @override
   Future<TaskItem> addTask(TaskItem task) async {
     final userId = _getCurrentUserId();
     if (userId == null) throw Exception('Not authenticated');

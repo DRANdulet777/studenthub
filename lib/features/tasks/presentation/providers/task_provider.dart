@@ -1,4 +1,11 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:student_hub/core/services/local_notification_service.dart';
+import 'package:student_hub/features/notifications/data/repositories/firebase/firebase_notification_repository.dart';
+import 'package:student_hub/features/notifications/domain/entities/notification_item.dart';
+import 'package:student_hub/features/notifications/domain/repositories/notification_repository.dart';
 import 'package:student_hub/features/tasks/data/repositories/task_repository.dart';
 import 'package:student_hub/features/tasks/data/repositories/firebase/firebase_task_repository.dart';
 import 'package:student_hub/features/tasks/domain/entities/task_item.dart';
@@ -14,16 +21,28 @@ class TaskState {
     return TaskState(
       tasks: tasks ?? this.tasks,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }
 
 class TaskNotifier extends StateNotifier<TaskState> {
   final TaskRepository _repository;
+  final LocalNotificationService _localNotifications;
+  final NotificationRepository _notificationRepository;
+  StreamSubscription<List<TaskItem>>? _taskSubscription;
+  final Set<String> _knownTaskIds = {};
+  bool _hasReceivedInitialSnapshot = false;
 
-  TaskNotifier(this._repository) : super(TaskState()) {
-    loadTasks();
+  TaskNotifier(
+    this._repository, {
+    LocalNotificationService? localNotifications,
+    NotificationRepository? notificationRepository,
+  }) : _localNotifications = localNotifications ?? LocalNotificationService(),
+       _notificationRepository =
+           notificationRepository ?? FirebaseNotificationRepository(),
+       super(TaskState()) {
+    watchTasks();
   }
 
   Future<void> loadTasks() async {
@@ -34,6 +53,61 @@ class TaskNotifier extends StateNotifier<TaskState> {
     } catch (e) {
       state = state.copyWith(error: e.toString(), isLoading: false);
     }
+  }
+
+  void watchTasks() {
+    state = state.copyWith(isLoading: true, error: null);
+    _taskSubscription?.cancel();
+    _taskSubscription = _repository.watchTasks().listen(
+      (tasks) {
+        unawaited(_notifyAboutNewTasks(tasks));
+        state = state.copyWith(tasks: tasks, isLoading: false, error: null);
+      },
+      onError: (Object error) {
+        state = state.copyWith(error: error.toString(), isLoading: false);
+      },
+    );
+  }
+
+  Future<void> _notifyAboutNewTasks(List<TaskItem> tasks) async {
+    final currentIds = tasks.map((task) => task.id).where((id) => id.isNotEmpty).toSet();
+    if (!_hasReceivedInitialSnapshot) {
+      _knownTaskIds
+        ..clear()
+        ..addAll(currentIds);
+      _hasReceivedInitialSnapshot = true;
+      return;
+    }
+
+    if (FirebaseAuth.instance.currentUser == null) return;
+
+    for (final task in tasks) {
+      if (task.id.isEmpty || _knownTaskIds.contains(task.id)) continue;
+      if (await _notificationRepository.hasNotificationForSource(task.id)) {
+        continue;
+      }
+
+      final title = task.title.trim().isEmpty ? 'Без названия' : task.title.trim();
+      await _localNotifications.showNewTaskNotification(
+        taskTitle: title,
+        taskId: task.id,
+      );
+      await _notificationRepository.createNotification(
+        NotificationItem(
+          id: task.id,
+          title: 'Новый дедлайн',
+          message: 'Добавлена задача: $title',
+          type: NotificationType.taskDeadline,
+          createdAt: DateTime.now(),
+          actionUrl: '/app/tasks',
+          sourceId: task.id,
+        ),
+      );
+    }
+
+    _knownTaskIds
+      ..clear()
+      ..addAll(currentIds);
   }
 
   Future<void> updateTaskStatus(String id, String status) async {
@@ -91,6 +165,12 @@ class TaskNotifier extends StateNotifier<TaskState> {
               task.dueDate.isAfter(now) && task.dueDate.isBefore(nextWeek),
         )
         .toList();
+  }
+
+  @override
+  void dispose() {
+    _taskSubscription?.cancel();
+    super.dispose();
   }
 }
 

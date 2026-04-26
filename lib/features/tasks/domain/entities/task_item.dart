@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TaskItem {
   final String id;
   final String title;
@@ -68,12 +70,19 @@ class TaskItem {
       description: json['description'] as String,
       subjectId: json['subjectId'] as String,
       subjectName: json['subjectName'] as String,
-      dueDate: dueDate is DateTime
-          ? dueDate
-          : DateTime.parse(dueDate as String),
+      dueDate: _parseDate(dueDate),
       status: json['status'] as String,
       priority: json['priority'] as String,
       attachments: List<String>.from(json['attachments'] ?? []),
     );
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 }

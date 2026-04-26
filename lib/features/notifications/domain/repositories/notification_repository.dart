@@ -4,6 +4,9 @@ abstract class NotificationRepository {
   /// Получить все уведомления
   Future<List<NotificationItem>> getNotifications();
 
+  /// Следить за уведомлениями
+  Stream<List<NotificationItem>> watchNotifications();
+
   /// Получить непрочитанные уведомления
   Future<List<NotificationItem>> getUnreadNotifications();
 
@@ -18,6 +21,9 @@ abstract class NotificationRepository {
 
   /// Создать новое уведомление
   Future<void> createNotification(NotificationItem notification);
+
+  /// Проверить наличие уведомления по исходному документу
+  Future<bool> hasNotificationForSource(String sourceId);
 
   /// Удалить уведомление
   Future<void> deleteNotification(String id);

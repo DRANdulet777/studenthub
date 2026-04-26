@@ -8,7 +8,6 @@ import 'package:student_hub/features/chat/presentation/screens/chat_screen.dart'
 import 'package:student_hub/features/core/presentation/app_shell.dart';
 import 'package:student_hub/features/grades/presentation/screens/grades_screen.dart';
 import 'package:student_hub/features/home/presentation/screens/home_screen.dart';
-import 'package:student_hub/features/materials/presentation/screens/materials_screen.dart';
 import 'package:student_hub/features/notifications/presentation/screens/notifications_screen.dart';
 import 'package:student_hub/features/profile/presentation/screens/profile_screen.dart';
 import 'package:student_hub/features/schedule/presentation/screens/schedule_screen.dart';
@@ -32,7 +31,6 @@ class AppRouter {
             GoRoute(path: '/app/home', builder: (context, state) => const HomeScreen()),
             GoRoute(path: '/app/schedule', builder: (context, state) => const ScheduleScreen()),
             GoRoute(path: '/app/tasks', builder: (context, state) => const TasksScreen()),
-            GoRoute(path: '/app/materials', builder: (context, state) => const MaterialsScreen()),
             GoRoute(path: '/app/chats', builder: (context, state) => const ChatScreen()),
             GoRoute(path: '/app/grades', builder: (context, state) => const GradesScreen()),
             GoRoute(path: '/app/notifications', builder: (context, state) => const NotificationsScreen()),

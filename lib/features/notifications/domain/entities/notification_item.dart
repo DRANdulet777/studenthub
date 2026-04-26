@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 enum NotificationType {
   taskDeadline('task_deadline', 'Дедлайн задачи'),
   scheduleReminder('schedule_reminder', 'Напоминание о расписании'),
@@ -12,6 +14,8 @@ enum NotificationType {
   final String displayName;
 
   static NotificationType fromString(String value) {
+    if (value == 'task') return NotificationType.taskDeadline;
+    if (value == 'grade') return NotificationType.gradePosted;
     return NotificationType.values.firstWhere(
       (type) => type.value == value,
       orElse: () => NotificationType.system,
@@ -49,6 +53,7 @@ class NotificationItem {
   final bool isRead;
   final Map<String, dynamic>? data;
   final String? actionUrl;
+  final String? sourceId;
 
   const NotificationItem({
     required this.id,
@@ -61,6 +66,7 @@ class NotificationItem {
     this.isRead = false,
     this.data,
     this.actionUrl,
+    this.sourceId,
   });
 
   NotificationItem copyWith({
@@ -74,6 +80,7 @@ class NotificationItem {
     bool? isRead,
     Map<String, dynamic>? data,
     String? actionUrl,
+    String? sourceId,
   }) {
     return NotificationItem(
       id: id ?? this.id,
@@ -86,37 +93,56 @@ class NotificationItem {
       isRead: isRead ?? this.isRead,
       data: data ?? this.data,
       actionUrl: actionUrl ?? this.actionUrl,
+      sourceId: sourceId ?? this.sourceId,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'title': title,
-      'message': message,
-      'type': type.value,
-      'priority': priority.value,
-      'createdAt': createdAt.toIso8601String(),
-      'scheduledAt': scheduledAt?.toIso8601String(),
+      'body': message,
+      'type': _typeToFirestoreValue(type),
+      'createdAt': createdAt,
       'isRead': isRead,
-      'data': data,
       'actionUrl': actionUrl,
+      'sourceId': sourceId,
     };
   }
 
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     return NotificationItem(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      message: json['message'] as String,
-      type: NotificationType.fromString(json['type'] as String),
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      message: json['body'] as String? ?? json['message'] as String? ?? '',
+      type: NotificationType.fromString(json['type'] as String? ?? ''),
       priority: NotificationPriority.fromString(json['priority'] as String? ?? 'normal'),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      scheduledAt: json['scheduledAt'] != null ? DateTime.parse(json['scheduledAt'] as String) : null,
+      createdAt: _parseDate(json['createdAt']),
+      scheduledAt: json['scheduledAt'] != null ? _parseDate(json['scheduledAt']) : null,
       isRead: json['isRead'] as bool? ?? false,
       data: json['data'] as Map<String, dynamic>?,
       actionUrl: json['actionUrl'] as String?,
+      sourceId: json['sourceId'] as String?,
     );
+  }
+
+  static String _typeToFirestoreValue(NotificationType type) {
+    switch (type) {
+      case NotificationType.taskDeadline:
+        return 'task';
+      case NotificationType.gradePosted:
+        return 'grade';
+      default:
+        return type.value;
+    }
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.fromMillisecondsSinceEpoch(0);
+    }
+    return DateTime.fromMillisecondsSinceEpoch(0);
   }
 
   @override

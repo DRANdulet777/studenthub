@@ -15,9 +15,8 @@ class _AppShellState extends State<AppShell> {
 
   final destinations = const [
     _ShellDestination(label: 'Home', icon: Icons.home_outlined, route: '/app/home'),
-    _ShellDestination(label: 'Расписание', icon: Icons.schedule_outlined, route: '/app/schedule'),
+    _ShellDestination(label: 'График', icon: Icons.schedule_outlined, route: '/app/schedule'),
     _ShellDestination(label: 'Задачи', icon: Icons.task_alt_outlined, route: '/app/tasks'),
-    _ShellDestination(label: 'Материалы', icon: Icons.folder_open_outlined, route: '/app/materials'),
     _ShellDestination(label: 'Чаты', icon: Icons.chat_bubble_outline, route: '/app/chats'),
     _ShellDestination(label: 'Оценки', icon: Icons.grade_outlined, route: '/app/grades'),
     _ShellDestination(label: 'Профиль', icon: Icons.person_outline, route: '/app/profile'),

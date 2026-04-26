@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:student_hub/features/notifications/data/repositories/firebase/firebase_notification_repository.dart';
@@ -33,17 +35,24 @@ class NotificationState {
       unreadNotifications: unreadNotifications ?? this.unreadNotifications,
       settings: settings ?? this.settings,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }
 
 class NotificationNotifier extends StateNotifier<NotificationState> {
   final NotificationRepository _repository;
+  StreamSubscription<List<NotificationItem>>? _notificationsSubscription;
 
   NotificationNotifier(this._repository) : super(const NotificationState()) {
-    loadNotifications();
+    watchNotifications();
     loadSettings();
+  }
+
+  @override
+  void dispose() {
+    _notificationsSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> loadNotifications() async {
@@ -65,6 +74,26 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
     }
   }
 
+  void watchNotifications() {
+    state = state.copyWith(isLoading: true, error: null);
+    _notificationsSubscription?.cancel();
+    _notificationsSubscription = _repository.watchNotifications().listen(
+      (notifications) {
+        state = state.copyWith(
+          notifications: notifications,
+          unreadNotifications: notifications
+              .where((notification) => !notification.isRead)
+              .toList(),
+          isLoading: false,
+          error: null,
+        );
+      },
+      onError: (Object error) {
+        state = state.copyWith(isLoading: false, error: error.toString());
+      },
+    );
+  }
+
   Future<void> loadSettings() async {
     try {
       final settings = await _repository.getNotificationSettings();
@@ -78,7 +107,6 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
   Future<void> markAsRead(String id) async {
     try {
       await _repository.markAsRead(id);
-      await loadNotifications(); // Перезагружаем список
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
@@ -140,6 +168,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
         scheduledAt: scheduledAt,
         data: data,
         actionUrl: actionUrl,
+        sourceId: data?['sourceId'] as String?,
       );
 
       if (scheduledAt != null) {
@@ -218,7 +247,7 @@ class NotificationNotifier extends StateNotifier<NotificationState> {
       type: NotificationType.materialUpdate,
       priority: NotificationPriority.low,
       data: {'materialId': materialId},
-      actionUrl: '/app/materials',
+      actionUrl: '/app/home',
     );
   }
 

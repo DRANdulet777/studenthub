@@ -57,7 +57,7 @@ class MockNotificationRepository implements NotificationRepository {
         createdAt: now.subtract(const Duration(hours: 6)),
         isRead: true,
         data: {'materialId': 'material_1'},
-        actionUrl: '/app/materials',
+        actionUrl: '/app/home',
       ),
       NotificationItem(
         id: '5',
@@ -78,6 +78,11 @@ class MockNotificationRepository implements NotificationRepository {
     await Future.delayed(const Duration(milliseconds: 500));
     return List.from(_notifications)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  @override
+  Stream<List<NotificationItem>> watchNotifications() async* {
+    yield await getNotifications();
   }
 
   @override
@@ -116,6 +121,10 @@ class MockNotificationRepository implements NotificationRepository {
   @override
   Future<void> createNotification(NotificationItem notification) async {
     await Future.delayed(const Duration(milliseconds: 200));
+    if (notification.sourceId != null &&
+        await hasNotificationForSource(notification.sourceId!)) {
+      return;
+    }
     _notifications.add(notification);
 
     // Показываем локальное уведомление, если настройки позволяют
@@ -128,6 +137,11 @@ class MockNotificationRepository implements NotificationRepository {
   Future<void> deleteNotification(String id) async {
     await Future.delayed(const Duration(milliseconds: 200));
     _notifications.removeWhere((n) => n.id == id);
+  }
+
+  @override
+  Future<bool> hasNotificationForSource(String sourceId) async {
+    return _notifications.any((notification) => notification.sourceId == sourceId);
   }
 
   @override
