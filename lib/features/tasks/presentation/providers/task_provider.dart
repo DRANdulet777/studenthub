@@ -31,8 +31,10 @@ class TaskNotifier extends StateNotifier<TaskState> {
   final LocalNotificationService _localNotifications;
   final NotificationRepository _notificationRepository;
   StreamSubscription<List<TaskItem>>? _taskSubscription;
+  StreamSubscription<User?>? _authSubscription;
   final Set<String> _knownTaskIds = {};
   bool _hasReceivedInitialSnapshot = false;
+  String? _activeUserId;
 
   TaskNotifier(
     this._repository, {
@@ -42,6 +44,13 @@ class TaskNotifier extends StateNotifier<TaskState> {
        _notificationRepository =
            notificationRepository ?? FirebaseNotificationRepository(),
        super(TaskState()) {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        clearTasks();
+      } else {
+        watchTasks();
+      }
+    });
     watchTasks();
   }
 
@@ -56,8 +65,23 @@ class TaskNotifier extends StateNotifier<TaskState> {
   }
 
   void watchTasks() {
-    state = state.copyWith(isLoading: true, error: null);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      clearTasks();
+      return;
+    }
+
+    if (_activeUserId == userId && _taskSubscription != null) {
+      return;
+    }
+
     _taskSubscription?.cancel();
+    _taskSubscription = null;
+    _activeUserId = userId;
+    _hasReceivedInitialSnapshot = false;
+    _knownTaskIds.clear();
+
+    state = state.copyWith(isLoading: true, error: null);
     _taskSubscription = _repository.watchTasks().listen(
       (tasks) {
         unawaited(_notifyAboutNewTasks(tasks));
@@ -67,6 +91,15 @@ class TaskNotifier extends StateNotifier<TaskState> {
         state = state.copyWith(error: error.toString(), isLoading: false);
       },
     );
+  }
+
+  void clearTasks() {
+    _taskSubscription?.cancel();
+    _taskSubscription = null;
+    _activeUserId = null;
+    _knownTaskIds.clear();
+    _hasReceivedInitialSnapshot = false;
+    state = TaskState();
   }
 
   Future<void> _notifyAboutNewTasks(List<TaskItem> tasks) async {
@@ -170,6 +203,7 @@ class TaskNotifier extends StateNotifier<TaskState> {
   @override
   void dispose() {
     _taskSubscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

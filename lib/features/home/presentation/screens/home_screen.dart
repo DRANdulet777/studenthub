@@ -9,11 +9,16 @@ import 'package:student_hub/features/schedule/presentation/providers/schedule_pr
 import 'package:student_hub/features/tasks/domain/entities/task_item.dart';
 import 'package:student_hub/features/tasks/presentation/providers/task_provider.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
     final scheduleState = ref.watch(scheduleProvider);
     final taskState = ref.watch(taskProvider);

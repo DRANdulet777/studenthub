@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:student_hub/features/schedule/data/repositories/firebase/firebase_schedule_repository.dart';
 import 'package:student_hub/features/schedule/data/repositories/schedule_repository.dart';
@@ -32,8 +33,17 @@ class ScheduleState {
 class ScheduleNotifier extends StateNotifier<ScheduleState> {
   final ScheduleRepository _repository;
   StreamSubscription<List<ScheduleItem>>? _scheduleSubscription;
+  StreamSubscription<User?>? _authSubscription;
+  String? _activeUserId;
 
   ScheduleNotifier(this._repository) : super(ScheduleState()) {
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        clearSchedules();
+      } else {
+        watchSchedules();
+      }
+    });
     watchSchedules();
   }
 
@@ -52,8 +62,21 @@ class ScheduleNotifier extends StateNotifier<ScheduleState> {
   }
 
   void watchSchedules() {
-    state = state.copyWith(isLoading: true);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      clearSchedules();
+      return;
+    }
+
+    if (_activeUserId == userId && _scheduleSubscription != null) {
+      return;
+    }
+
     _scheduleSubscription?.cancel();
+    _scheduleSubscription = null;
+    _activeUserId = userId;
+
+    state = state.copyWith(isLoading: true, error: null);
     _scheduleSubscription = _repository.watchSchedule().listen(
       (schedules) {
         state = state.copyWith(
@@ -66,6 +89,13 @@ class ScheduleNotifier extends StateNotifier<ScheduleState> {
         state = state.copyWith(isLoading: false, error: error.toString());
       },
     );
+  }
+
+  void clearSchedules() {
+    _scheduleSubscription?.cancel();
+    _scheduleSubscription = null;
+    _activeUserId = null;
+    state = ScheduleState();
   }
 
   Future<void> addLesson(ScheduleItem lesson) async {
@@ -104,6 +134,7 @@ class ScheduleNotifier extends StateNotifier<ScheduleState> {
   @override
   void dispose() {
     _scheduleSubscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 }

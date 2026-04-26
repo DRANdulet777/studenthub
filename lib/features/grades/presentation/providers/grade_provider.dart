@@ -38,7 +38,7 @@ class GradeState {
       subjectGrades: subjectGrades ?? this.subjectGrades,
       overallAverage: overallAverage ?? this.overallAverage,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: error,
     );
   }
 }
@@ -48,8 +48,10 @@ class GradeNotifier extends StateNotifier<GradeState> {
   final LocalNotificationService _localNotifications;
   final NotificationRepository _notificationRepository;
   StreamSubscription<List<GradeItem>>? _gradesSubscription;
+  StreamSubscription<User?>? _authSubscription;
   final Set<String> _knownGradeIds = {};
   bool _hasReceivedInitialSnapshot = false;
+  String? _activeUserId;
 
   GradeNotifier(
     this._repository, {
@@ -59,12 +61,20 @@ class GradeNotifier extends StateNotifier<GradeState> {
        _notificationRepository =
            notificationRepository ?? FirebaseNotificationRepository(),
        super(GradeState()) {
-    _watchGrades();
+    _authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        clearGrades();
+      } else {
+        watchGrades();
+      }
+    });
+    watchGrades();
   }
 
   @override
   void dispose() {
     _gradesSubscription?.cancel();
+    _authSubscription?.cancel();
     super.dispose();
   }
 
@@ -78,7 +88,23 @@ class GradeNotifier extends StateNotifier<GradeState> {
     }
   }
 
-  void _watchGrades() {
+  void watchGrades() {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      clearGrades();
+      return;
+    }
+
+    if (_activeUserId == userId && _gradesSubscription != null) {
+      return;
+    }
+
+    _gradesSubscription?.cancel();
+    _gradesSubscription = null;
+    _activeUserId = userId;
+    _knownGradeIds.clear();
+    _hasReceivedInitialSnapshot = false;
+
     state = state.copyWith(isLoading: true, error: null);
     _gradesSubscription = _repository.watchGrades().listen(
       _setGrades,
@@ -86,6 +112,15 @@ class GradeNotifier extends StateNotifier<GradeState> {
         state = state.copyWith(error: error.toString(), isLoading: false);
       },
     );
+  }
+
+  void clearGrades() {
+    _gradesSubscription?.cancel();
+    _gradesSubscription = null;
+    _activeUserId = null;
+    _knownGradeIds.clear();
+    _hasReceivedInitialSnapshot = false;
+    state = GradeState();
   }
 
   void _setGrades(List<GradeItem> grades) {
